@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { last, lastValueFrom } from 'rxjs';
 import { DeleteResult, Repository } from 'typeorm';
+import { ClientService } from './client.service';
 import Reservation from './reservation.model';
 
 @Injectable()
@@ -8,7 +10,7 @@ export class ReservationService {
 
     constructor(
         @InjectRepository(Reservation)
-            private repository: Repository<Reservation>) {
+            private repository: Repository<Reservation>, private clientService: ClientService) {
             }
     
     async findAll(): Promise<Reservation[]> {
@@ -33,11 +35,27 @@ export class ReservationService {
         })
     }
     async create(reservation: Reservation): Promise<Reservation> {
-        return await this.repository.save(reservation);
+        Logger.log(reservation.client);
+        let res =  await this.repository.save(reservation);
+        if (res.status === 'CONFIRM') {
+            const client = await this.clientService.findClientById(res.client);
+            const value = await lastValueFrom(client);
+            const invoice = await this.clientService.postInvoice(res, value);
+            const value2 = await lastValueFrom(invoice);
+        }
+        return res
     }
 
     async changeStatus(status: string, id: string): Promise<any> {
-        return await this.repository.update(id, { status: status });
+        let changeSt = await this.repository.update(id, { status: status });
+        if (status === 'CONFIRM') {
+            let res = await this.repository.findOne(id, {relations: ["reservations"]});
+            const client = await this.clientService.findClientById(res.client);
+            const value = await lastValueFrom(client);
+            const invoice = await this.clientService.postInvoice(res, value);
+            const value2 = await lastValueFrom(invoice);
+        }
+        return changeSt;
     }
 
     async delete(id: number): Promise<DeleteResult> {

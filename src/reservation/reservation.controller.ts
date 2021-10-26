@@ -34,7 +34,6 @@ export class ReservationController {
     }
     @Post()
     async create(@Body() model: Reservation) {
-        Logger.log(model)
         return await this.service.create(model);
     }
 
